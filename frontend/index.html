@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Library — Browse & Borrow</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="preconnect" href="https://covers.openlibrary.org" />
+  <style>
+    body { background: #0f172a; color: #e2e8f0; }
+    .navbar, .offcanvas, .modal-content { background: #111827; color: #e5e7eb; }
+    .card { background: #0b1220; border: 1px solid rgba(255,255,255,.08); }
+    .form-control, .form-select { background: #0b1220; border-color: #334155; color: #e5e7eb; }
+    .form-control:focus, .form-select:focus { border-color: #60a5fa; box-shadow: 0 0 0 .2rem rgba(96,165,250,.25); }
+    .badge { background: #1f2937; }
+    .link-muted { color: #9ca3af; }
+    .result-count { color: #9ca3af; }
+    .pointer { cursor: pointer; }
+    .cover { aspect-ratio: 2/3; object-fit: cover; background: #111827; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg border-bottom border-secondary-subtle sticky-top">
+    <div class="container-fluid">
+      <a class="navbar-brand text-light fw-bold" href="#">📚 Library</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="nav">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item"><a class="nav-link active" data-view="browse" href="#">Browse</a></li>
+          <li class="nav-item"><a class="nav-link" data-view="loans" href="#">My Loans</a></li>
+        </ul>
+        <div class="d-flex align-items-center gap-2">
+          <span id="memberChip" class="badge rounded-pill">Guest</span>
+          <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#memberModal">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="container py-4" id="app">
+    <!-- Browse View -->
+    <section id="view-browse">
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-6">
+          <label class="form-label">Search books</label>
+          <input id="q" class="form-control" placeholder="Title, author, subject…" />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Type</label>
+          <select id="type" class="form-select">
+            <option value="q" selected>Keyword</option>
+            <option value="title">Title</option>
+            <option value="author">Author</option>
+            <option value="subject">Subject</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Sort</label>
+          <select id="sort" class="form-select">
+            <option value="relevance" selected>Relevance</option>
+            <option value="editions"># Editions</option>
+            <option value="first_publish_year">First Pub. Year</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2 d-grid">
+          <button id="btnSearch" class="btn btn-primary">Search</button>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <div class="result-count" id="resultCount">Try a search to see results</div>
+        <div class="btn-group" role="group" aria-label="Pagination">
+          <button id="prevPage" class="btn btn-outline-secondary btn-sm" disabled>Prev</button>
+          <button id="nextPage" class="btn btn-outline-secondary btn-sm" disabled>Next</button>
+        </div>
+      </div>
+
+      <div id="grid" class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-3 mt-1"></div>
+    </section>
+
+    <!-- Loans View -->
+    <section id="view-loans" class="d-none">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">My Loans</h5>
+        <button id="refreshLoans" class="btn btn-outline-light btn-sm">Refresh</button>
+      </div>
+      <div id="loansEmpty" class="text-center text-muted py-5 d-none">No loans yet.</div>
+      <div class="table-responsive">
+        <table class="table table-dark table-striped align-middle" id="loansTable">
+          <thead>
+            <tr><th>Book</th><th>Author</th><th>Due</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Book Detail Modal -->
+  <div class="modal fade" id="bookModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="bookTitle">Book</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <img id="bookCover" class="img-fluid rounded cover" alt="Cover" />
+            </div>
+            <div class="col-12 col-md-8">
+              <div class="mb-2"><span class="text-secondary">Author(s):</span> <span id="bookAuthors"></span></div>
+              <div class="mb-2"><span class="text-secondary">First published:</span> <span id="bookYear"></span></div>
+              <div class="mb-2"><span class="text-secondary">Subjects:</span> <span id="bookSubjects"></span></div>
+              <p id="bookDesc" class="mt-3 mb-0"></p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <input type="date" id="dueDate" class="form-control w-auto" />
+          <button id="borrowBtn" class="btn btn-primary">Borrow</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Member Modal -->
+  <div class="modal fade" id="memberModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Member sign in</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Enter your Member ID</label>
+          <input id="memberIdInput" class="form-control" placeholder="e.g. M000123" />
+          <div class="form-text">(For demo, any ID is accepted. In production this should validate against MySQL members.)</div>
+        </div>
+        <div class="modal-footer">
+          <button id="saveMember" class="btn btn-primary" data-bs-dismiss="modal">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  // ---------- Config ----------
+  const API = {
+    openLibrarySearch: ({ type, q, page, sort }) => {
+      // Open Library supports search.json with many params; we use page & q variants
+      let queryParam = encodeURIComponent(q.trim());
+      let url;
+      if (type === 'title') url = `https://openlibrary.org/search.json?title=${queryParam}&page=${page}`;
+      else if (type === 'author') url = `https://openlibrary.org/search.json?author=${queryParam}&page=${page}`;
+      else if (type === 'subject') url = `https://openlibrary.org/subjects/${encodeURIComponent(q.trim().toLowerCase())}.json?limit=50&offset=${(page-1)*50}`;
+      else url = `https://openlibrary.org/search.json?q=${queryParam}&page=${page}`;
+      return fetch(url).then(r => r.json());
+    },
+    openLibraryWork: (workKey) => fetch(`https://openlibrary.org${workKey}.json`).then(r => r.json()),
+
+    // ---- Backend (to implement on your server backed by MySQL) ----
+    // POST /api/loans {memberId, olid, title, author, dueDate}
+    createLoan: async (payload) => {
+      // For demo: store locally so the UI works without a server
+      const loans = JSON.parse(localStorage.getItem('loans')||'[]');
+      loans.push({ id: crypto.randomUUID(), status: 'OUT', ...payload });
+      localStorage.setItem('loans', JSON.stringify(loans));
+      return { ok: true, id: loans.at(-1).id };
+      // Real impl example:
+      // return fetch('/api/loans', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}).then(r=>r.json());
+    },
+    listLoans: async (memberId) => {
+      const all = JSON.parse(localStorage.getItem('loans')||'[]');
+      return all.filter(l => l.memberId === memberId);
+      // Real: return fetch(`/api/members/${memberId}/loans`).then(r=>r.json());
+    },
+    returnLoan: async (loanId) => {
+      const all = JSON.parse(localStorage.getItem('loans')||'[]');
+      const i = all.findIndex(l => l.id === loanId);
+      if (i !== -1) { all[i].status = 'RETURNED'; localStorage.setItem('loans', JSON.stringify(all)); }
+      return { ok: true };
+      // Real: return fetch(`/api/loans/${loanId}/return`, { method:'POST'}).then(r=>r.json());
+    }
+  };
+
+  // ---------- State ----------
+  let state = {
+    page: 1,
+    q: '',
+    type: 'q',
+    sort: 'relevance',
+    results: [],
+    total: 0,
+    memberId: localStorage.getItem('memberId') || null,
+    currentBook: null,
+    subjectMode: false
+  };
+
+  // ---------- Helpers ----------
+  const el = sel => document.querySelector(sel);
+  const setMemberChip = () => el('#memberChip').textContent = state.memberId ? `Member ${state.memberId}` : 'Guest';
+  const coverUrl = (doc) => {
+    const olid = doc.cover_edition_key || (doc.edition_key && doc.edition_key[0]);
+    if (!olid) return 'https://placehold.co/400x600/111827/9ca3af?text=No+Cover';
+    return `https://covers.openlibrary.org/b/olid/${olid}-M.jpg`;
+  };
+  const fmtDate = (d) => new Date(d).toLocaleDateString();
+  const debounce = (fn, ms=500) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms);} };
+
+  // ---------- Rendering ----------
+  function renderResults(docs, total) {
+    const grid = el('#grid');
+    grid.innerHTML = '';
+    docs.forEach(doc => {
+      const card = document.createElement('div');
+      card.className = 'col';
+      card.innerHTML = `
+        <div class="card h-100 shadow-sm">
+          <img src="${coverUrl(doc)}" class="card-img-top cover" alt="cover"/>
+          <div class="card-body d-flex flex-column">
+            <h6 class="card-title text-truncate" title="${doc.title||''}">${doc.title||'Untitled'}</h6>
+            <div class="small text-secondary mb-2 text-truncate" title="${(doc.author_name||[]).join(', ')}">${(doc.author_name||[]).join(', ')||'—'}</div>
+            <div class="mt-auto d-flex justify-content-between align-items-center">
+              <span class="badge">${doc.first_publish_year||'—'}</span>
+              <button class="btn btn-outline-primary btn-sm" data-key="${doc.key}" data-doc='${JSON.stringify({title: doc.title, authors: doc.author_name, subjects: doc.subject, first_publish_year: doc.first_publish_year, cover_edition_key: doc.cover_edition_key, edition_key: doc.edition_key})}'>Details</button>
+            </div>
+          </div>
+        </div>`;
+      grid.appendChild(card);
+    });
+    el('#resultCount').textContent = `${total?.toLocaleString?.() || docs.length} results`; 
+    el('#prevPage').disabled = state.page <= 1;
+    el('#nextPage').disabled = docs.length === 0 || (state.subjectMode && docs.length < 50);
+  }
+
+  function switchView(name) {
+    el('#view-browse').classList.toggle('d-none', name !== 'browse');
+    el('#view-loans').classList.toggle('d-none', name !== 'loans');
+    document.querySelectorAll('[data-view]').forEach(a => a.classList.toggle('active', a.dataset.view === name));
+  }
+
+  async function openBookModal(docLike) {
+    // docLike is from search; enrich via work API if possible
+    el('#bookTitle').textContent = docLike.title || 'Untitled';
+    el('#bookAuthors').textContent = (docLike.authors||[]).join(', ') || '—';
+    el('#bookSubjects').textContent = (docLike.subjects||[]).slice(0,10).join(', ') || '—';
+    el('#bookYear').textContent = docLike.first_publish_year || '—';
+    el('#bookCover').src = coverUrl(docLike);
+    el('#bookDesc').textContent = 'Loading description…';
+
+    // Try to fetch work details for a better description if we have a work key like "/works/OL…W"
+    try {
+      if (docLike.key) {
+        const work = await API.openLibraryWork(docLike.key);
+        const desc = typeof work.description === 'string' ? work.description : work.description?.value;
+        el('#bookDesc').textContent = desc || 'No description available.';
+      } else {
+        el('#bookDesc').textContent = 'No description available.';
+      }
+    } catch {
+      el('#bookDesc').textContent = 'No description available.';
+    }
+
+    state.currentBook = docLike;
+    const m = new bootstrap.Modal('#bookModal');
+    m.show();
+  }
+
+  async function doSearch() {
+    const q = state.q.trim();
+    if (!q) { renderResults([], 0); return; }
+    el('#resultCount').textContent = 'Searching…';
+    const type = state.type;
+    state.subjectMode = (type === 'subject');
+
+    const res = await API.openLibrarySearch({ type, q, page: state.page, sort: state.sort });
+
+    if (state.subjectMode) {
+      // subject endpoint returns {works:[], work_count}
+      const docs = (res.works||[]).map(w => ({
+        key: w.key,
+        title: w.title,
+        author_name: (w.authors||[]).map(a=>a.name),
+        subject: w.subject,
+        first_publish_year: w.first_publish_year,
+        cover_edition_key: null,
+        edition_key: null
+      }));
+      state.results = docs;
+      state.total = res.work_count || docs.length;
+      renderResults(docs, state.total);
+    } else {
+      const docs = res.docs||[];
+      // Optional sorting client-side fallback
+      if (state.sort === 'editions') docs.sort((a,b)=>(b.edition_count||0)-(a.edition_count||0));
+      if (state.sort === 'first_publish_year') docs.sort((a,b)=>(b.first_publish_year||0)-(a.first_publish_year||0));
+      state.results = docs;
+      state.total = res.numFound || docs.length;
+      renderResults(docs, state.total);
+    }
+  }
+
+  async function loadLoans() {
+    const tbody = el('#loansTable tbody');
+    tbody.innerHTML = '';
+    if (!state.memberId) { el('#loansEmpty').classList.remove('d-none'); return; }
+    const loans = await API.listLoans(state.memberId);
+    if (!loans.length) { el('#loansEmpty').classList.remove('d-none'); return; }
+    el('#loansEmpty').classList.add('d-none');
+    for (const L of loans) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${L.title}</td>
+        <td>${L.author||'—'}</td>
+        <td>${fmtDate(L.dueDate)}</td>
+        <td><span class="badge ${L.status==='OUT'?'bg-warning text-dark':'bg-success'}">${L.status}</span></td>
+        <td class="text-end">
+          ${L.status==='OUT' ? `<button class="btn btn-sm btn-outline-light" data-return="${L.id}">Return</button>`: ''}
+        </td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ---------- Events ----------
+  document.addEventListener('click', async (e) => {
+    const view = e.target.closest('[data-view]')?.dataset.view;
+    if (view) { switchView(view); if (view==='loans') loadLoans(); e.preventDefault(); }
+
+    const detailsBtn = e.target.closest('button[data-key]');
+    if (detailsBtn) {
+      const doc = JSON.parse(detailsBtn.dataset.doc);
+      doc.key = detailsBtn.dataset.key; // work key like "/works/OLxxxxW"
+      doc.authors = doc.authors || [];
+      doc.subjects = doc.subject || [];
+      await openBookModal(doc);
+    }
+
+    const returnBtn = e.target.closest('button[data-return]');
+    if (returnBtn) { await API.returnLoan(returnBtn.dataset.return); await loadLoans(); }
+  });
+
+  el('#btnSearch').addEventListener('click', ()=>{ state.page=1; doSearch(); });
+  el('#q').addEventListener('input', debounce(()=>{ state.q = el('#q').value; state.page=1; doSearch(); }));
+  el('#type').addEventListener('change', ()=>{ state.type = el('#type').value; state.page=1; doSearch(); });
+  el('#sort').addEventListener('change', ()=>{ state.sort = el('#sort').value; state.page=1; doSearch(); });
+  el('#prevPage').addEventListener('click', ()=>{ if (state.page>1){ state.page--; doSearch(); } });
+  el('#nextPage').addEventListener('click', ()=>{ state.page++; doSearch(); });
+
+  el('#saveMember').addEventListener('click', ()=>{
+    const id = el('#memberIdInput').value.trim();
+    if (id) { state.memberId = id; localStorage.setItem('memberId', id); setMemberChip(); loadLoans(); }
+  });
+
+  el('#borrowBtn').addEventListener('click', async ()=>{
+    if (!state.memberId) { new bootstrap.Modal('#memberModal').show(); return; }
+    const due = el('#dueDate').value || new Date(Date.now()+1000*60*60*24*14).toISOString().slice(0,10); // default +14d
+    const authors = (state.currentBook.authors||[]).join(', ');
+    const payload = { memberId: state.memberId, olid: state.currentBook.edition_key?.[0] || state.currentBook.cover_edition_key || state.currentBook.key, title: state.currentBook.title, author: authors, dueDate: due };
+    const res = await API.createLoan(payload);
+    if (res?.ok) {
+      const m = bootstrap.Modal.getInstance('#bookModal');
+      m?.hide();
+      switchView('loans');
+      await loadLoans();
+    }
+  });
+
+  // Init
+  setMemberChip();
+  // Prefill demo query
+  el('#q').value = 'data structures'; state.q = 'data structures'; doSearch();
+  </script>
+
+  <!--
+  ============================= BACKEND CONTRACT (to implement) =============================
+  Create a small REST API backed by MySQL tables `members`, `loans`, `books` (optional cache).
+
+  POST /api/loans
+    Body: { memberId: string, olid: string, title: string, author: string, dueDate: yyyy-mm-dd }
+    Effect: INSERT INTO loans(member_id, olid, title, author, due_date, status) VALUES(…,'OUT');
+    Returns: { ok: true, id: string }
+
+  GET /api/members/:memberId/loans
+    Returns: [{ id, title, author, dueDate, status }]
+
+  POST /api/loans/:id/return
+    Effect: UPDATE loans SET status='RETURNED', returned_at=NOW() WHERE id=:id;
+
+  Optionally cache Open Library responses in `books` table by olid/work key.
+  ==========================================================================================
+  -->
+</body>
+</html>

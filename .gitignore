@@ -1,0 +1,17 @@
+# Generated/runtime files
+temp/
+logs/
+
+# Private configuration
+.env
+
+# VS Code
+.vscode/
+
+# Local database files
+*.db
+*.idx
+
+# OS files
+.DS_Store
+Thumbs.db

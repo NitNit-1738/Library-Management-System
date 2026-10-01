@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3">Browse Books</h1>
+
+<form class="row g-2 mb-3" method="get" action="{{ url_for('home') }}">
+  <div class="col-md-6">
+    <input name="q" value="{{ q }}" class="form-control" placeholder="Search by title">
+  </div>
+  <div class="col-md-3">
+    <input name="year" value="{{ year }}" class="form-control" placeholder="Year">
+  </div>
+  <div class="col-md-3 d-grid">
+    <button class="btn btn-primary">Search</button>
+  </div>
+</form>
+
+{% if books %}
+  <div class="list-group">
+    {% for b in books %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+         href="{{ url_for('book_detail', book_id=b.BookID) }}">
+        <span>
+          <strong>{{ b.Title }}</strong>
+          {% if b.PublicationYear %}<small class="text-muted"> ({{ b.PublicationYear }})</small>{% endif %}
+        </span>
+        <small class="text-muted">#{{ b.BookID }}</small>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-muted">No books found. Try a different search.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">{{ book.Title }}</h1>
+<ul class="list-unstyled">
+  {% if book.ISBN %}<li><strong>ISBN:</strong> {{ book.ISBN }}</li>{% endif %}
+  {% if book.PublicationYear %}<li><strong>Year:</strong> {{ book.PublicationYear }}</li>{% endif %}
+  <li><strong>Book ID:</strong> {{ book.BookID }}</li>
+</ul>
+
+<div class="d-flex gap-2">
+  {% if available %}
+    <a href="{{ url_for('borrow', book_id=book.BookID) }}" class="btn btn-success">Borrow</a>
+  {% else %}
+    <button class="btn btn-secondary" disabled>Currently Unavailable</button>
+  {% endif %}
+  <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Back to Browse</a>
+</div>
+{% endblock %}
